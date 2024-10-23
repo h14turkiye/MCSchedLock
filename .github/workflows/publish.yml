@@ -1,0 +1,51 @@
+name: Publish
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish:
+    if: contains(github.event.head_commit.message, '[publish]')
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: '21'
+
+    - name: Extract version from commit message
+      id: extract_version
+      run: |
+        echo "COMMIT_MESSAGE=${{ github.event.head_commit.message }}" >> $GITHUB_ENV
+        VERSION=$(echo ${{ github.event.head_commit.message }} | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*')
+        echo "VERSION=${VERSION}" >> $GITHUB_ENV
+      shell: bash
+
+    - name: Build with Gradle
+      run: ./gradlew shadowJar
+
+    - name: Create GitHub Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ env.VERSION }}
+        release_name: Release ${{ env.VERSION }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: build/libs/MCSchedLock-all.jar
+        asset_name: MCSchedLock-all-${{ env.VERSION }}.jar
+        asset_content_type: application/java-archive
